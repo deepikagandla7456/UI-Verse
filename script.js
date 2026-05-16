@@ -8,6 +8,16 @@
  * LEGACY CODE: These global functions remain for compatibility with inline onclick handlers
  */
 
+// Ensure theme API is available on pages that include only script.js
+(function(){
+  if (!window.ThemeAPI) {
+    const s = document.createElement('script');
+    s.src = '/js/theme-api.js';
+    s.defer = true;
+    document.head.appendChild(s);
+  }
+})();
+
 // =====================================================================
 // LEGACY GLOBAL FUNCTIONS (BACKWARD COMPATIBILITY)
 // =====================================================================
@@ -160,7 +170,72 @@ window.handleSearch = window.handleSearch || function(event) {
   } else if (typeof Search !== 'undefined' && Search.handleRouting) {
     Search.handleRouting(event);
   }
-};
+}
+
+// Scroll to top
+function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+function initScrollTop() { const btn = document.getElementById('scrollTopBtn'); if (!btn) return; window.addEventListener('scroll', () => { const visible = window.scrollY > 50; btn.style.display = visible ? 'block' : 'none'; btn.classList.toggle('visible', window.scrollY > 400); document.getElementById('navbar')?.classList.toggle('scrolled', window.scrollY > 40); }); btn.addEventListener('click', () => scrollToTop()); }
+
+// Progress bar
+function initProgressBar() { const bar = document.getElementById('progressBar'); if (!bar) return; window.addEventListener('scroll', () => { const scrollTop = document.documentElement.scrollTop; const height = document.documentElement.scrollHeight - document.documentElement.clientHeight; bar.style.width = ((scrollTop / Math.max(height, 1)) * 100) + '%'; }); }
+
+// Alerts & subscribe
+function closeAlert(alertId) { const a = document.getElementById(alertId); if (a) a.style.display = 'none'; }
+function subscribe(e) { e.preventDefault(); showToastSafe('Subscribed successfully! 🎉'); }
+
+// Init
+window.addEventListener('DOMContentLoaded', () => {
+  // Popup reference
+  window.popup = document.getElementById('popup');
+  // Isolate component styles by wrapping component cards in a Shadow DOM.
+  // This keeps component markup scoped and prevents accidental global CSS leakage.
+  function initShadowWrap() {
+    try {
+      const styleHrefs = ['/css/main.css', '/style.css'];
+      document.querySelectorAll('.component-card').forEach((card, idx) => {
+        if (card.dataset.uiverseIsolated === '1') return;
+        // create a host element to hold the shadow root
+        const host = document.createElement('div');
+        host.className = 'uiverse-component-host';
+        // move attributes that may be used for identification
+        host.dataset.originalIndex = idx;
+
+        // move card children into host's shadow root
+        const shadow = host.attachShadow({ mode: 'open' });
+
+        // add same CSS links inside shadow to preserve component visuals but keep them scoped
+        styleHrefs.forEach(href => {
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = href;
+          shadow.appendChild(link);
+        });
+
+        // copy the innerHTML of the card into the shadow
+        const wrapper = document.createElement('div');
+        wrapper.className = 'uiverse-component-inner';
+        wrapper.innerHTML = card.innerHTML;
+        shadow.appendChild(wrapper);
+
+        // clear original card and append host
+        card.innerHTML = '';
+        card.appendChild(host);
+        card.dataset.uiverseIsolated = '1';
+      });
+    } catch (e) { console.warn('initShadowWrap failed', e); }
+  }
+
+  initShadowWrap();
+
+  initAccessibilityHardeningLegacy();
+  initSidebar();
+  initLiveSandboxes();
+  initDarkMode();
+  initAccessibilityMode();
+  initScrollTop();
+  initProgressBar();
+  initSearchFilter();
+  createFilterUI();  // Initialize filter UI
 
   // Attach global search handler
   const searchEl = document.getElementById('searchInput');
@@ -189,6 +264,50 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+
+// Load offline sync helpers (idb + collection sync) for collection features
+(function(){
+  if (!window.UIV || !window.UIV.idb) {
+    const s = document.createElement('script'); s.src = '/js/idb.js'; s.defer = true; document.head.appendChild(s);
+  }
+  if (!window.CollectionSync) {
+    const s2 = document.createElement('script'); s2.src = '/js/collection-sync.js'; s2.defer = true; document.head.appendChild(s2);
+  }
+})();
+
+// Wire up collectible buttons and elements to enqueue offline actions
+window.addEventListener('DOMContentLoaded', () => {
+  try {
+    document.querySelectorAll('[data-collectible]').forEach(el => {
+      const btn = el.querySelector('.collect-btn') || el;
+      btn.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        const id = el.dataset.collectible;
+        const action = btn.dataset.action || 'add';
+        if (window.CollectionSync) {
+          if (action === 'remove') {
+            await window.CollectionSync.enqueueRemove(id);
+            showToastSafe('Removed from collection (offline-first)');
+          } else {
+            const item = { id: id, html: el.innerHTML };
+            await window.CollectionSync.enqueueAdd(item);
+            showToastSafe('Added to collection (offline-first)');
+          }
+        } else {
+          showToastSafe('Collection sync not available');
+        }
+      });
+    });
+    // provide a manual sync trigger button if present
+    const syncBtn = document.getElementById('syncCollectionsBtn');
+    if (syncBtn) syncBtn.addEventListener('click', () => {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage('trigger-sync');
+      }
+      if (window.CollectionSync) window.CollectionSync.processQueueOnce().then(r => showToastSafe(`Synced ${r.synced} items`)).catch(()=>{});
+    });
+  } catch (e) { /* ignore */ }
+});
 
 
 // ================= SEARCH (ROUTING) =================
