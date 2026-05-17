@@ -687,21 +687,7 @@
     observer.observe(el);
   });
 
-  function showToast(message, isError = false) {
-    const existing = document.querySelector('.toast-notification');
-    if (existing) existing.remove();
-    
-    const toast = document.createElement('div');
-    toast.className = 'toast-notification';
-    toast.style.cssText = `
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      padding: 12px 24px;
-      background: ${isError ? '#d63031' : '#00b894'};
-      color: white;
-      border-radius: 8px;
-      font-weight: 500;
+  // showToast is now centralized in js/core/utility-functions.js
       z-index: 10000;
       animation: slideIn 0.3s ease;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
